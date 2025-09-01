@@ -31,3 +31,4 @@ services:
       - AUTO_START_SESSIONS=${AUTO_START_SESSIONS}
     volumes:
       - ./sessions:/usr/src/app/sessions # Mount the local ./sessions/ folder to the container's /usr/src/app/sessions folder
+      - /usr/bin/chromium-browser:/usr/bin/chromium-browser  # Add this line
