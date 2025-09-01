@@ -3,8 +3,8 @@ version: '3.8'
 services:
   app:
     container_name: whatsapp_web_api
-    build: .
-    #image: chrishubert/whatsapp-web-api:latest # Pull the image from Docker Hub
+    #build: .
+    image: avoylenko/wwebjs-api:latest
     restart: always
     ports:
       - "${PORT}:${PORT}"
