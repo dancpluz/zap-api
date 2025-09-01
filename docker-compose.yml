@@ -22,5 +22,12 @@ services:
       - WEB_VERSION=${WEB_VERSION}
       - WEB_VERSION_CACHE_TYPE=${WEB_VERSION_CACHE_TYPE}
       - RECOVER_SESSIONS=${RECOVER_SESSIONS}
+      - CHROME_BIN=${CHROME_BIN}
+      - HEADLESS=${HEADLESS}
+      - RELEASE_BROWSER_LOCK=${RELEASE_BROWSER_LOCK}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - ENABLE_WEBHOOK=${ENABLE_WEBHOOK}
+      - ENABLE_WEBSOCKET=${ENABLE_WEBSOCKET}
+      - AUTO_START_SESSIONS=${AUTO_START_SESSIONS}
     volumes:
       - ./sessions:/usr/src/app/sessions # Mount the local ./sessions/ folder to the container's /usr/src/app/sessions folder
