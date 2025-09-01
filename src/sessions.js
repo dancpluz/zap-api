@@ -62,16 +62,20 @@ const validateSession = async (sessionId) => {
 const restoreSessions = () => {
   try {
     if (!fs.existsSync(sessionFolderPath)) {
-      fs.mkdirSync(sessionFolderPath) // Create the session directory if it doesn't exist
+      fs.mkdirSync(sessionFolderPath)
     }
-    // Read the contents of the folder
     fs.readdir(sessionFolderPath, (_, files) => {
-      // Iterate through the files in the parent folder
       for (const file of files) {
-        // Use regular expression to extract the string from the folder name
         const match = file.match(/^session-(.+)$/)
         if (match) {
           const sessionId = match[1]
+          const profileDir = path.join(sessionFolderPath, `session-${sessionId}`)
+          const lockFile = path.join(profileDir, 'SingletonLock')
+
+          // Remove lock file if it exists
+          if (fs.existsSync(lockFile)) {
+            fs.unlinkSync(lockFile)
+          }
           console.log('existing session detected', sessionId)
           setupSession(sessionId)
         }
@@ -84,73 +88,71 @@ const restoreSessions = () => {
 }
 
 // Setup Session
-const setupSession = (sessionId) => {
-  try {
-    if (sessions.has(sessionId)) {
-      return { success: false, message: `Session already exists for: ${sessionId}`, client: sessions.get(sessionId) }
-    }
-
-    // Disable the delete folder from the logout function (will be handled separately)
-    const localAuth = new LocalAuth({ clientId: sessionId, dataPath: sessionFolderPath })
-    delete localAuth.logout
-    localAuth.logout = () => { }
-
-    const clientOptions = {
-      puppeteer: {
-        executablePath: process.env.CHROME_BIN || null,
-        // headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage']
-      },
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
-      authStrategy: localAuth
-    }
-
-    if (webVersion) {
-      clientOptions.webVersion = webVersion
-      switch (webVersionCacheType.toLowerCase()) {
-        case 'local':
-          clientOptions.webVersionCache = {
-            type: 'local'
-          }
-          break
-        case 'remote':
-          clientOptions.webVersionCache = {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/' + webVersion + '.html'
-          }
-          break
-        default:
-          clientOptions.webVersionCache = {
-            type: 'none'
-          }
+const setupSession = async (sessionId, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      if (sessions.has(sessionId)) {
+        return { success: false, message: `Session already exists for: ${sessionId}`, client: sessions.get(sessionId) }
       }
-    }
 
-    const client = new Client(clientOptions)
+      // Disable the delete folder from the logout function (will be handled separately)
+      const localAuth = new LocalAuth({ clientId: sessionId, dataPath: sessionFolderPath })
+      delete localAuth.logout
+      localAuth.logout = () => { }
 
-    const cleanLockFiles = (sessionId) => {
-      const dir = path.join(sessionFolderPath,`session-${sessionId}`);
-      ['SingletonLock','SingletonCookie'].forEach(file => {
-        const p = path.join(dir,file);
-        if (fs.existsSync(p)) {
-          fs.unlinkSync(p);
-          console.log(`Auto-removed lock file: ${p}`);
+      const clientOptions = {
+        puppeteer: {
+          executablePath: process.env.CHROME_BIN || null,
+          // headless: false,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            `--user-data-dir=${path.join(sessionFolderPath, `session-${sessionId}-profile`)}` // Unique profile path
+          ]
+        },
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
+        authStrategy: localAuth
+      }
+
+      if (webVersion) {
+        clientOptions.webVersion = webVersion
+        switch (webVersionCacheType.toLowerCase()) {
+          case 'local':
+            clientOptions.webVersionCache = {
+              type: 'local'
+            }
+            break
+          case 'remote':
+            clientOptions.webVersionCache = {
+              type: 'remote',
+              remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/' + webVersion + '.html'
+            }
+            break
+          default:
+            clientOptions.webVersionCache = {
+              type: 'none'
+            }
         }
-      });
-    };
+      }
 
-    // Inside setupSession:
-    cleanLockFiles(sessionId);
+      const client = new Client(clientOptions)
 
-    client.initialize().catch(err => console.log('Initialize error:', err.message))
+      client.initialize().catch(err => console.log('Initialize error:', err.message))
 
-    initializeEvents(client, sessionId)
+      initializeEvents(client, sessionId)
 
-    // Save the session to the Map
-    sessions.set(sessionId, client)
-    return { success: true, message: 'Session initiated successfully', client }
-  } catch (error) {
-    return { success: false, message: error.message, client: null }
+      // Save the session to the Map
+      sessions.set(sessionId, client)
+      return { success: true, message: 'Session initiated successfully', client }
+    } catch (error) {
+      if (error.message.includes('profile') && error.message.includes('in use')) {
+        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1))) // Wait before retry
+        continue
+      }
+      return { success: false, message: error.message, client: null }
+    }
   }
 }
 
