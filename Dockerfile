@@ -1,36 +1,32 @@
-# Use the official Node.js Debian image as the base image
-FROM node:22-bookworm-slim AS base
+# Use the official Node.js Alpine image as the base image
+FROM node:20-alpine
 
-ENV CHROME_BIN="/usr/bin/chromium" \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
-    NODE_ENV="production"
-
+# Set the working directory
 WORKDIR /usr/src/app
 
-FROM base AS deps
+# Install Chromium
+ENV CHROME_BIN="/usr/bin/chromium-browser" \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
+    NODE_ENV="production"
+RUN set -x \
+    && apk update \
+    && apk upgrade \
+    && apk add --no-cache \
+    udev \
+    ttf-freefont \
+    chromium
 
+# Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
 
+# Install the dependencies
 RUN npm ci --only=production --ignore-scripts
 
-# Create the final stage
-FROM base
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    fonts-freefont-ttf \
-    chromium \
-    ffmpeg && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy only production dependencies from deps stage
-COPY --from=deps /usr/src/app/node_modules ./node_modules
-
-# Copy application code
+# Copy the rest of the source code to the working directory
 COPY . .
 
+# Expose the port the API will run on
 EXPOSE 3000
 
+# Start the API
 CMD ["npm", "start"]
