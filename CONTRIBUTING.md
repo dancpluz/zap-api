@@ -1,6 +1,6 @@
-# Contributing to WhatsApp Web.js REST API Wrapper
+# Contributing to WWebJS REST API Wrapper
 
-Welcome to WhatsApp Web.js REST API Wrapper! We appreciate your interest in contributing to this project. Please follow the guidelines below to contribute effectively.
+Welcome to WWebJS API Wrapper! We appreciate your interest in contributing to this project. Please follow the guidelines below to contribute effectively.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ Welcome to WhatsApp Web.js REST API Wrapper! We appreciate your interest in cont
 
 ## Pull Requests
 
-- Create a pull request from your branch to the `master` branch of this repository.
+- Create a pull request from your branch to the `main` branch of this repository.
 - Provide a clear and descriptive title for your pull request.
 - Include a detailed description of the changes you made in the pull request.
 - Reference any related issues in your pull request description using the `#` symbol followed by the issue number.
@@ -54,4 +54,4 @@ console.log(hello);
 
 If you have any questions or need further assistance, feel free to contact us by opening an issue or reaching out to us through email or chat.
 
-Thank you for your contribution to WhatsApp Web.js REST API Wrapper!
+Thank you for your contribution!

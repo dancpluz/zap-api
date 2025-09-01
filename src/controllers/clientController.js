@@ -1,4 +1,4 @@
-const { MessageMedia, Location, Buttons, List, Poll } = require('whatsapp-web.js')
+const { MessageMedia, Location, Poll } = require('whatsapp-web.js')
 const { sessions } = require('../sessions')
 const { sendErrorResponse } = require('../utils')
 
@@ -20,6 +20,7 @@ const { sendErrorResponse } = require('../utils')
  */
 const sendMessage = async (req, res) => {
   /*
+    #swagger.summary = 'Send a message to a specific chatId'
     #swagger.requestBody = {
       required: true,
       '@content': {
@@ -29,11 +30,11 @@ const sendMessage = async (req, res) => {
             properties: {
               chatId: {
                 type: 'string',
-                description: 'The Chat id which contains the message (Group or Individual)',
+                description: 'The chat id which contains the message (Group or Individual)',
               },
               contentType: {
                 type: 'string',
-                description: 'The type of message content, must be one of the following: string, MessageMedia, MessageMediaFromURL, Location, Buttons, or List',
+                description: 'The type of message content, must be one of the following: string, MessageMedia, MessageMediaFromURL, Location, Contact or Poll',
               },
               content: {
                 type: 'object',
@@ -50,10 +51,6 @@ const sendMessage = async (req, res) => {
             MessageMedia: { value: { chatId: '6281288888888@c.us', contentType: 'MessageMedia', content: { mimetype: 'image/jpeg', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', filename: 'image.jpg' } } },
             MessageMediaFromURL: { value: { chatId: '6281288888888@c.us', contentType: 'MessageMediaFromURL', content: 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=Example' } },
             Location: { value: { chatId: '6281288888888@c.us', contentType: 'Location', content: { latitude: -6.2, longitude: 106.8, description: 'Jakarta' } } },
-            Buttons: { value: { chatId: '6281288888888@c.us', contentType: 'Buttons', content: { body: 'Hello World!', buttons: [{ body: 'button 1' }], title: 'Hello World!', footer: 'Hello World!' } } },
-            List: {
-              value: { chatId: '6281288888888@c.us', contentType: 'List', content: { body: 'Hello World!', buttonText: 'Hello World!', sections: [{ title: 'sectionTitle', rows: [{ id: 'customId', title: 'ListItem2', description: 'desc' }, { title: 'ListItem2' }] }], title: 'Hello World!', footer: 'Hello World!' } }
-            },
             Contact: {
               value: { chatId: '6281288888888@c.us', contentType: 'Contact', content: { contactId: '6281288888889@c.us' } }
             },
@@ -67,63 +64,53 @@ const sendMessage = async (req, res) => {
   */
 
   try {
-    const { chatId, content, contentType, options } = req.body
+    const { chatId, content, contentType, options = {}, mediaFromURLOptions = {} } = req.body
     const client = sessions.get(req.params.sessionId)
+    const sendOptions = { waitUntilMsgSent: true, ...options }
 
     let messageOut
     switch (contentType) {
       case 'string':
-        if (options?.media) {
-          const media = options.media
-          media.filename = null
-          media.filesize = null
-          options.media = new MessageMedia(media.mimetype, media.data, media.filename, media.filesize)
+        if (sendOptions?.media) {
+          const { mimetype, data, filename = null, filesize = null } = sendOptions.media
+          if (!mimetype || !data) {
+            return sendErrorResponse(res, 400, 'invalid media options')
+          }
+          sendOptions.media = new MessageMedia(mimetype, data, filename, filesize)
         }
-        messageOut = await client.sendMessage(chatId, content, options)
+        messageOut = await client.sendMessage(chatId, content, sendOptions)
         break
       case 'MessageMediaFromURL': {
-        const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true })
-        messageOut = await client.sendMessage(chatId, messageMediaFromURL, options)
+        const messageMediaFromURL = await MessageMedia.fromUrl(content, { unsafeMime: true, ...mediaFromURLOptions })
+        messageOut = await client.sendMessage(chatId, messageMediaFromURL, sendOptions)
         break
       }
       case 'MessageMedia': {
         const messageMedia = new MessageMedia(content.mimetype, content.data, content.filename, content.filesize)
-        messageOut = await client.sendMessage(chatId, messageMedia, options)
+        messageOut = await client.sendMessage(chatId, messageMedia, sendOptions)
         break
       }
       case 'Location': {
         const location = new Location(content.latitude, content.longitude, content.description)
-        messageOut = await client.sendMessage(chatId, location, options)
-        break
-      }
-      case 'Buttons': {
-        const buttons = new Buttons(content.body, content.buttons, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, buttons, options)
-        break
-      }
-      case 'List': {
-        const list = new List(content.body, content.buttonText, content.sections, content.title, content.footer)
-        messageOut = await client.sendMessage(chatId, list, options)
+        messageOut = await client.sendMessage(chatId, location, sendOptions)
         break
       }
       case 'Contact': {
         const contactId = content.contactId.endsWith('@c.us') ? content.contactId : `${content.contactId}@c.us`
         const contact = await client.getContactById(contactId)
-        messageOut = await client.sendMessage(chatId, contact, options)
+        messageOut = await client.sendMessage(chatId, contact, sendOptions)
         break
       }
       case 'Poll': {
         const poll = new Poll(content.pollName, content.pollOptions, content.options)
-        messageOut = await client.sendMessage(chatId, poll, options)
+        messageOut = await client.sendMessage(chatId, poll, sendOptions)
         break
       }
       default:
-        return sendErrorResponse(res, 404, 'contentType invalid, must be string, MessageMedia, MessageMediaFromURL, Location, Buttons, List, Contact or Poll')
+        return sendErrorResponse(res, 400, 'invalid contentType')
     }
-
     res.json({ success: true, message: messageOut })
   } catch (error) {
-    console.log(error)
     sendErrorResponse(res, 500, error.message)
   }
 }
@@ -131,7 +118,6 @@ const sendMessage = async (req, res) => {
 /**
  * Get session information for a given sessionId
  *
- * @async
  * @function getClientInfo
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -139,10 +125,13 @@ const sendMessage = async (req, res) => {
  * @returns {Object} - Response object with session info
  * @throws Will throw an error if session info cannot be retrieved
  */
-const getClassInfo = async (req, res) => {
+const getClassInfo = (req, res) => {
+  /*
+    #swagger.summary = 'Get current connection information'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
-    const sessionInfo = await client.info
+    const sessionInfo = client.info
     res.json({ success: true, sessionInfo })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
@@ -163,6 +152,7 @@ const getClassInfo = async (req, res) => {
  */
 const isRegisteredUser = async (req, res) => {
   /*
+    #swagger.summary = 'Check if a given ID is registered in WhatsApp'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -201,6 +191,8 @@ const isRegisteredUser = async (req, res) => {
  */
 const getNumberId = async (req, res) => {
   /*
+    #swagger.summary = 'Get the registered WhatsApp ID for a number'
+    #swagger.description = 'Return null if the number is not registered on WhatsApp'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -239,10 +231,41 @@ const getNumberId = async (req, res) => {
  * @throws Will throw an error if group cannot be created
  */
 const createGroup = async (req, res) => {
+  /*
+    #swagger.summary = 'Create a new group'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Group title',
+            example: 'Group name'
+          },
+          participants: {
+            type: 'array',
+            description: 'A single contact ID as a string or an array of contact IDs to add to the group',
+            example: []
+          },
+          options: {
+            type: 'object',
+            description: 'An object that handles options for group creation',
+            example: {}
+          },
+        }
+      },
+    }
+  */
   try {
-    const { name, participants } = req.body
+    const { title, participants, options = {} } = req.body
     const client = sessions.get(req.params.sessionId)
-    const response = await client.createGroup(name, participants)
+    let response
+    if (Object.keys(options).length) {
+      response = await client.createGroup(title, participants, options)
+    } else {
+      response = await client.createGroup(title, participants)
+    }
     res.json({ success: true, response })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
@@ -263,6 +286,7 @@ const createGroup = async (req, res) => {
  */
 const setStatus = async (req, res) => {
   /*
+    #swagger.summary = "Set the current user's status message"
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -271,7 +295,7 @@ const setStatus = async (req, res) => {
           status: {
             type: 'string',
             description: 'New status message',
-            example: 'I\'m running WhatsApp Web Api'
+            example: 'I\'m running WWebJS Api'
           },
         }
       },
@@ -297,6 +321,9 @@ const setStatus = async (req, res) => {
  * @returns {Promise<void>} - A Promise that resolves with the retrieved contacts or rejects with an error.
  */
 const getContacts = async (req, res) => {
+  /*
+    #swagger.summary = 'Get all current contacts'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const contacts = await client.getContacts()
@@ -321,6 +348,9 @@ const getContacts = async (req, res) => {
  * @throws {Error} If the operation fails, an error is thrown.
  */
 const getChats = async (req, res) => {
+  /*
+    #swagger.summary = 'Get all current chats'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const chats = await client.getChats()
@@ -344,6 +374,7 @@ const getChats = async (req, res) => {
  */
 const getProfilePictureUrl = async (req, res) => {
   /*
+    #swagger.summary = "Return the contact ID's profile picture URL"
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -383,6 +414,7 @@ const getProfilePictureUrl = async (req, res) => {
  */
 const acceptInvite = async (req, res) => {
   /*
+    #swagger.summary = 'Accept an invitation to join a group'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -420,6 +452,9 @@ const acceptInvite = async (req, res) => {
  * @throws {Error} If there is an error while accepting the invite.
  */
 const getWWebVersion = async (req, res) => {
+  /*
+    #swagger.summary = 'Return the version of WhatsApp Web currently being run'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const result = await client.getWWebVersion()
@@ -444,6 +479,7 @@ const getWWebVersion = async (req, res) => {
  */
 const archiveChat = async (req, res) => {
   /*
+    #swagger.summary = 'Archive the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -480,6 +516,9 @@ const archiveChat = async (req, res) => {
  * @throws {Error} - Throws an error if the operation fails.
  */
 const getBlockedContacts = async (req, res) => {
+  /*
+    #swagger.summary = 'Get all blocked contacts by host account'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const blockedContacts = await client.getBlockedContacts()
@@ -503,6 +542,7 @@ const getBlockedContacts = async (req, res) => {
  */
 const getChatById = async (req, res) => {
   /*
+    #swagger.summary = 'Get the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -521,6 +561,9 @@ const getChatById = async (req, res) => {
     const { chatId } = req.body
     const client = sessions.get(req.params.sessionId)
     const chat = await client.getChatById(chatId)
+    if (!chat) {
+      throw new Error('Chat not found')
+    }
     res.json({ success: true, chat })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
@@ -541,6 +584,7 @@ const getChatById = async (req, res) => {
  */
 const getChatLabels = async (req, res) => {
   /*
+    #swagger.summary = 'Get all labels assigned to the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -579,6 +623,7 @@ const getChatLabels = async (req, res) => {
  */
 const getChatsByLabelId = async (req, res) => {
   /*
+    #swagger.summary = 'Get all chats for a specific label'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -616,6 +661,8 @@ const getChatsByLabelId = async (req, res) => {
  */
 const getCommonGroups = async (req, res) => {
   /*
+    #swagger.summary = "Get the contact's common groups"
+    #swagger.description = "Get the contact's common groups with you. Returns empty array if you don't have any common group."
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -653,6 +700,7 @@ const getCommonGroups = async (req, res) => {
  */
 const getContactById = async (req, res) => {
   /*
+    #swagger.summary = 'Get the contact'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -690,6 +738,8 @@ const getContactById = async (req, res) => {
  */
 const getInviteInfo = async (req, res) => {
   /*
+    #swagger.summary = 'Return invite information'
+    #swagger.description = 'Return an object with information about the invite code's group'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -728,6 +778,7 @@ const getInviteInfo = async (req, res) => {
  */
 const getLabelById = async (req, res) => {
   /*
+    #swagger.summary = 'Get the label'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -763,6 +814,9 @@ const getLabelById = async (req, res) => {
  * @throws {Error} If there is an error retrieving the labels.
  */
 const getLabels = async (req, res) => {
+  /*
+    #swagger.summary = 'Get all current labels'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const labels = await client.getLabels()
@@ -783,6 +837,7 @@ const getLabels = async (req, res) => {
  */
 const addOrRemoveLabels = async (req, res) => {
   /*
+  #swagger.summary = 'Change labels in chats'
   #swagger.requestBody = {
     required: true,
     schema: {
@@ -801,12 +856,12 @@ const addOrRemoveLabels = async (req, res) => {
       }
     },
   }
-*/
+  */
   try {
     const { labelIds, chatIds } = req.body
     const client = sessions.get(req.params.sessionId)
-    const labels = await client.addOrRemoveLabels(labelIds, chatIds)
-    res.json({ success: true, labels })
+    await client.addOrRemoveLabels(labelIds, chatIds)
+    res.json({ success: true })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -823,6 +878,9 @@ const addOrRemoveLabels = async (req, res) => {
  * @throws {Error} If there is an error retrieving the state.
  */
 const getState = async (req, res) => {
+  /*
+    #swagger.summary = 'Get the current connection state for the client'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
     const state = await client.getState()
@@ -846,6 +904,7 @@ const getState = async (req, res) => {
  */
 const markChatUnread = async (req, res) => {
   /*
+    #swagger.summary = 'Mark the chat as unread'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -863,8 +922,8 @@ const markChatUnread = async (req, res) => {
   try {
     const { chatId } = req.body
     const client = sessions.get(req.params.sessionId)
-    const mark = await client.markChatUnread(chatId)
-    res.json({ success: true, mark })
+    await client.markChatUnread(chatId)
+    res.json({ success: true })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -885,6 +944,8 @@ const markChatUnread = async (req, res) => {
  */
 const muteChat = async (req, res) => {
   /*
+    #swagger.summary = 'Mute the chat'
+    #swagger.description = 'Mute this chat forever, unless a date is specified'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -897,8 +958,8 @@ const muteChat = async (req, res) => {
           },
           unmuteDate: {
             type: 'string',
-            description: 'Date when the chat will be muted, leave as is to mute forever',
-            example: ''
+            description: 'Timestamp when the chat will be muted, leave as is to mute forever',
+            example: '1733489397'
           },
         }
       },
@@ -907,13 +968,12 @@ const muteChat = async (req, res) => {
   try {
     const { chatId, unmuteDate } = req.body
     const client = sessions.get(req.params.sessionId)
-    let mute
     if (unmuteDate) {
-      mute = await client.muteChat(chatId, new Date(unmuteDate))
+      await client.muteChat(chatId, new Date(unmuteDate * 1000))
     } else {
-      mute = await client.muteChat(chatId, null)
+      await client.muteChat(chatId, null)
     }
-    res.json({ success: true, mute })
+    res.json({ success: true })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -933,6 +993,7 @@ const muteChat = async (req, res) => {
  */
 const pinChat = async (req, res) => {
   /*
+    #swagger.summary = 'Pin the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -941,7 +1002,7 @@ const pinChat = async (req, res) => {
           chatId: {
             type: 'string',
             description: 'ID of the chat',
-            example: ''
+            example: '6281288888888@c.us'
           },
         }
       },
@@ -971,6 +1032,7 @@ const pinChat = async (req, res) => {
  */
 const searchMessages = async (req, res) => {
   /*
+    #swagger.summary = 'Search for messages'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -984,7 +1046,7 @@ const searchMessages = async (req, res) => {
           options: {
             type: 'object',
             description: 'Search options',
-            example: {}
+            example: { limit: 10, page: 1 }
           },
         }
       },
@@ -1016,10 +1078,13 @@ const searchMessages = async (req, res) => {
  * @throws {Error} - If there's an error during the presence sending.
  */
 const sendPresenceAvailable = async (req, res) => {
+  /*
+    #swagger.summary = 'Mark the client as online'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
-    const presence = await client.sendPresenceAvailable()
-    res.json({ success: true, presence })
+    await client.sendPresenceAvailable()
+    res.json({ success: true })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -1036,10 +1101,13 @@ const sendPresenceAvailable = async (req, res) => {
  * @throws {Error} - If there's an error during the presence sending.
  */
 const sendPresenceUnavailable = async (req, res) => {
+  /*
+    #swagger.summary = 'Mark the client as unavailable'
+  */
   try {
     const client = sessions.get(req.params.sessionId)
-    const presence = await client.sendPresenceUnavailable()
-    res.json({ success: true, presence })
+    await client.sendPresenceUnavailable()
+    res.json({ success: true })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -1058,6 +1126,7 @@ const sendPresenceUnavailable = async (req, res) => {
  */
 const sendSeen = async (req, res) => {
   /*
+    #swagger.summary = 'Mark the chat as seen'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1066,7 +1135,7 @@ const sendSeen = async (req, res) => {
           chatId: {
             type: 'string',
             description: 'ID of the chat',
-            example: ''
+            example: '6281288888888@c.us'
           },
         }
       },
@@ -1095,6 +1164,8 @@ const sendSeen = async (req, res) => {
  */
 const setDisplayName = async (req, res) => {
   /*
+    #swagger.summary = 'Set the current user's display name'
+    #swagger.description = 'This is the name shown to WhatsApp users that have not added you as a contact beside your number in groups and in your profile.'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1132,6 +1203,7 @@ const setDisplayName = async (req, res) => {
  */
 const unarchiveChat = async (req, res) => {
   /*
+    #swagger.summary = 'Changes archive state of the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1140,7 +1212,7 @@ const unarchiveChat = async (req, res) => {
           chatId: {
             type: 'string',
             description: 'ID of the chat',
-            example: ''
+            example: '6281288888888@c.us'
           },
         }
       },
@@ -1170,6 +1242,7 @@ const unarchiveChat = async (req, res) => {
  */
 const unmuteChat = async (req, res) => {
   /*
+    #swagger.summary = 'Unmute the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1178,7 +1251,7 @@ const unmuteChat = async (req, res) => {
           chatId: {
             type: 'string',
             description: 'ID of the chat',
-            example: ''
+            example: '6281288888888@c.us'
           },
         }
       },
@@ -1208,6 +1281,7 @@ const unmuteChat = async (req, res) => {
  */
 const unpinChat = async (req, res) => {
   /*
+    #swagger.summary = 'Unpin the chat'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1216,7 +1290,7 @@ const unpinChat = async (req, res) => {
           chatId: {
             type: 'string',
             description: 'ID of the chat',
-            example: ''
+            example: '6281288888888@c.us'
           },
         }
       },
@@ -1233,7 +1307,7 @@ const unpinChat = async (req, res) => {
 }
 
 /**
- * update the profile Picture of the session user
+ * Update the profile Picture of the session user
  * @param {Object} req - The request object.
  * @param {Object} res - The response object.
  * @param {Object} req.body.media - The new profile picture to set for the user's WhatsApp account.
@@ -1244,6 +1318,7 @@ const unpinChat = async (req, res) => {
 
 const setProfilePicture = async (req, res) => {
   /*
+    #swagger.summary = 'Set the current user\'s profile picture'
     #swagger.requestBody = {
       required: true,
       schema: {
@@ -1270,6 +1345,817 @@ const setProfilePicture = async (req, res) => {
     const media = new MessageMedia(pictureMimetype, pictureData)
     const result = await client.setProfilePicture(media)
     res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Delete the profile Picture of the session user
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} Returns a JSON object with a success status and the result of the function.
+ * @throws {Error} If there is an issue deleting the profile picture, an error will be thrown.
+ */
+
+const deleteProfilePicture = async (req, res) => {
+  /*
+    #swagger.summary = "Delete the current user's profile picture"
+  */
+  try {
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.deleteProfilePicture()
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Set auto load download audio value
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} Returns a JSON object with a success status and the result of the function.
+ * @throws {Error} If there is an issue deleting the profile picture, an error will be thrown.
+ */
+
+const setAutoDownloadAudio = async (req, res) => {
+  /*
+    #swagger.summary = 'Set auto load download audio flag'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          flag: {
+            type: 'boolean',
+            description: 'Flag true/false',
+            example: true
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { flag } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.setAutoDownloadAudio(flag)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Set auto load download documents value
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} Returns a JSON object with a success status and the result of the function.
+ * @throws {Error} If there is an issue deleting the profile picture, an error will be thrown.
+ */
+
+const setAutoDownloadDocuments = async (req, res) => {
+  /*
+    #swagger.summary = 'Set auto load download documents flag'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          flag: {
+            type: 'boolean',
+            description: 'Flag true/false',
+            example: true
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { flag } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.setAutoDownloadDocuments(flag)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Set auto load download photos value
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} Returns a JSON object with a success status and the result of the function.
+ * @throws {Error} If there is an issue deleting the profile picture, an error will be thrown.
+ */
+
+const setAutoDownloadPhotos = async (req, res) => {
+  /*
+    #swagger.summary = 'Set auto load download photos flag'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          flag: {
+            type: 'boolean',
+            description: 'Flag true/false',
+            example: true
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { flag } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.setAutoDownloadPhotos(flag)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Set auto load download videos value
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} Returns a JSON object with a success status and the result of the function.
+ * @throws {Error} If there is an issue deleting the profile picture, an error will be thrown.
+ */
+
+const setAutoDownloadVideos = async (req, res) => {
+  /*
+    #swagger.summary = 'Set auto load download videos flag'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          flag: {
+            type: 'boolean',
+            description: 'Flag true/false',
+            example: true
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { flag } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.setAutoDownloadVideos(flag)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Sync chat history conversation.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const syncHistory = async (req, res) => {
+  /*
+    #swagger.summary = 'Sync chat history'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          chatId: {
+            type: 'string',
+            description: 'ID of the chat',
+            example: '6281288888888@c.us'
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { chatId } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.syncHistory(chatId)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Get user device count by ID.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getContactDeviceCount = async (req, res) => {
+  /*
+    #swagger.summary = 'Get user device count'
+    #swagger.description = 'Each WaWeb Connection counts as one device, and the phone (if exists) counts as one device. So for a non-enterprise user with one WaWeb connection it should return "2"'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          userId: {
+            type: 'string',
+            description: 'ID of the user',
+            example: ''
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { userId } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getContactDeviceCount(userId)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Get the country code of a WhatsApp ID.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getCountryCode = async (req, res) => {
+  /*
+    #swagger.summary = 'Get the country code'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          number: {
+            type: 'string',
+            description: 'Number or ID',
+            example: ''
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { number } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getCountryCode(number)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Get the formatted number of a WhatsApp ID.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getFormattedNumber = async (req, res) => {
+  /*
+    #swagger.summary = 'Get the formatted number'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          number: {
+            type: 'string',
+            description: 'Number or ID',
+            example: ''
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { number } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getFormattedNumber(number)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Open the chat window.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const openChatWindow = async (req, res) => {
+  /*
+    #swagger.summary = 'Open the chat window'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          chatId: {
+            type: 'string',
+            description: 'ID of the chat',
+            example: '6281288888888@c.us'
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { chatId } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.interface.openChatWindow(chatId)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Open or scroll the chat window to the position of the message.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const openChatWindowAt = async (req, res) => {
+  /*
+    #swagger.summary = 'Open the chat window to the position of the message'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          messageId: {
+            type: 'string',
+            description: 'ID of the message to scroll to (serialized)',
+            example: 'false_31235678901@c.us_3A40CB10BC3680B1EE'
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { messageId } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.interface.openChatWindowAt(messageId)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Force reset of connection state for the client.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const resetState = async (req, res) => {
+  /*
+    #swagger.summary = 'Force reset of connection state for the client'
+  */
+  try {
+    const client = sessions.get(req.params.sessionId)
+    await client.resetState()
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Change the background synchronization setting.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const setBackgroundSync = async (req, res) => {
+  /*
+    #swagger.summary = 'Change the background synchronization setting'
+    #swagger.description = 'NOTE: This action will take effect after you restart the client'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          flag: {
+            type: 'boolean',
+            description: 'flag true/false',
+            example: true
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { flag = true } = req.body
+    const client = sessions.get(req.params.sessionId)
+    await client.setBackgroundSync(flag)
+    res.json({ success: true })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Retrieve the contact lid and phone number for a specific chat.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.chatId - The unique identifier of the chat to unmute.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getContactLidAndPhone = async (req, res) => {
+  /*
+    #swagger.summary = 'Get contact lid and phone'
+    #swagger.description = 'Retrieve the contact lid and phone number for a specific chat'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          userIds: {
+            type: 'array',
+            items: {
+              type: 'string',
+              description: 'The unique identifier of the user',
+            },
+            example: ['6281288888888@c.us']
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { userIds = [] } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getContactLidAndPhone(userIds)
+    res.json({ success: true, data: result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Gets all cached Channel instances.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getChannels = async (req, res) => {
+  /*
+    #swagger.summary = 'Get channels from the client'
+    #swagger.description = 'Retrieve a list of channels from the client'
+  */
+  try {
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getChannels()
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Creates a new channel.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const createChannel = async (req, res) => {
+  /*
+    #swagger.summary = 'Create a new channel',
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'The title of the channel',
+            example: 'My New Channel'
+          },
+          options: {
+            type: 'object',
+            properties: {
+              description: {
+                type: 'string',
+                description: 'The description of the channel',
+                example: 'This is my new channel'
+              },
+            }
+          }
+        }
+      },
+    }
+  */
+  try {
+    const { title, options } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = options ? await client.createChannel(title, options) : await client.createChannel(title)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Subscribes to a new channel.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const subscribeToChannel = async (req, res) => {
+  /*
+    #swagger.summary = 'Subscribe to a channel',
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          channelId: {
+            type: 'string',
+            description: 'The ID of the channel',
+            example: 'XXXXXXXXXX@newsletter'
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { channelId } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.subscribeToChannel(channelId)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Unsubscribe from a channel.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const unsubscribeFromChannel = async (req, res) => {
+  /*
+    #swagger.summary = 'Unsubscribe from channel',
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          channelId: {
+            type: 'string',
+            description: 'The ID of the channel',
+            example: 'XXXXXXXXXX@newsletter'
+          },
+          options: {
+            type: 'object',
+            properties: {
+              deleteLocalModels: {
+                type: 'boolean',
+                example: true
+              },
+            }
+          }
+        }
+      },
+    }
+  */
+  try {
+    const { channelId, options } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = options ? await client.unsubscribeFromChannel(channelId, options) : await client.unsubscribeFromChannel(channelId)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Search channels.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const searchChannels = async (req, res) => {
+  /*
+    #swagger.summary = 'Search channels',
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          searchOptions: {
+            properties: {
+              searchText: {
+                type: 'string',
+                description: 'The text to search for in channel names',
+                example: ''
+              },
+              countryCodes: {
+                type: 'array',
+                description: 'An array of country codes in ISO 3166-1 alpha-2 standard to search',
+                example: ['US', 'CA']
+              },
+              skipSubscribedNewsletters: {
+                type: 'boolean',
+                description: 'If true, channels that user is subscribed to won\'t appear in found channels',
+                example: true
+              },
+              view: {
+                type: 'number',
+                description: 'The category of channels to get',
+                example: 0
+              },
+              limit: {
+                type: 'number',
+                description: 'The maximum number of channels to return',
+                example: 10
+              }
+            }
+          }
+        }
+      },
+    }
+  */
+  try {
+    const { searchOptions = {} } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const foundChannels = await client.searchChannels(searchOptions)
+    res.json({ success: true, result: foundChannels })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Gets a Channel instance by invite code.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.body.inviteCode - The unique identifier of the channel to retrieve.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const getChannelByInviteCode = async (req, res) => {
+  /*
+    #swagger.summary = 'Get channel by invite code'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          inviteCode: {
+            type: 'string',
+            description: 'The code that comes after the \"https://whatsapp.com/channel/\"',
+          },
+        }
+      },
+    }
+  */
+  try {
+    const { inviteCode } = req.body
+    const client = sessions.get(req.params.sessionId)
+    const result = await client.getChannelByInviteCode(inviteCode)
+    res.json({ success: true, result })
+  } catch (error) {
+    sendErrorResponse(res, 500, error.message)
+  }
+}
+
+/**
+ * Executes a method on the client associated with the given sessionId.
+ *
+ * @async
+ * @function
+ * @param {Object} req - The HTTP request object containing the chatId and sessionId.
+ * @param {string} req.params.sessionId - The unique identifier of the session associated with the client to use.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise<Object>} - A Promise that resolves with a JSON object containing a success flag and the result of the operation.
+ * @throws {Error} - If an error occurs during the operation, it is thrown and handled by the catch block.
+ */
+const runMethod = async (req, res) => {
+  /*
+    #swagger.summary = 'Execute a method on the client'
+    #swagger.description = 'Execute a method on the client and return the result'
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          method: {
+            type: 'string',
+            description: 'The name of the method to execute',
+            example: 'getLabels'
+          },
+          options: {
+            anyOf: [
+              { type: 'object' },
+              { type: 'string' }
+            ],
+            description: 'The options to pass to the method',
+          }
+        }
+      },
+    }
+  */
+  try {
+    const { method, options } = req.body
+    const client = sessions.get(req.params.sessionId)
+    if (typeof client[method] !== 'function') {
+      throw new Error('Method is not implemented')
+    }
+    const result = options ? await client[method](options) : await client[method]()
+    res.json({ success: true, data: result })
   } catch (error) {
     sendErrorResponse(res, 500, error.message)
   }
@@ -1310,5 +2196,26 @@ module.exports = {
   unarchiveChat,
   unmuteChat,
   unpinChat,
-  getWWebVersion
+  getWWebVersion,
+  deleteProfilePicture,
+  setAutoDownloadAudio,
+  setAutoDownloadDocuments,
+  setAutoDownloadPhotos,
+  setAutoDownloadVideos,
+  syncHistory,
+  getContactDeviceCount,
+  getCountryCode,
+  getFormattedNumber,
+  openChatWindow,
+  openChatWindowAt,
+  resetState,
+  setBackgroundSync,
+  getContactLidAndPhone,
+  getChannels,
+  getChannelByInviteCode,
+  createChannel,
+  subscribeToChannel,
+  unsubscribeFromChannel,
+  searchChannels,
+  runMethod
 }

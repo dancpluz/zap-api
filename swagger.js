@@ -5,17 +5,17 @@ const endpointsFiles = ['./src/routes.js']
 
 const doc = {
   info: {
-    title: 'WhatsApp API',
-    description: 'API Wrapper for WhatsAppWebJS'
+    title: 'WWebJS API',
+    description: 'API wrapper for WhatsAppWebJS'
   },
   servers: [
     {
-      url: '',
-      description: ''
+      url: '/',
+      description: 'default server'
     },
     {
       url: 'http://localhost:3000',
-      description: 'localhost'
+      description: 'localhost server'
     }
   ],
   securityDefinitions: {
@@ -36,14 +36,17 @@ const doc = {
       description: 'All functions related to the client'
     },
     {
-      name: 'Message',
-      description: 'May fail if the message is too old (Only from the last 100 Messages of the given chat)'
+      name: 'Message'
     }
   ],
   definitions: {
     StartSessionResponse: {
       success: true,
       message: 'Session initiated successfully'
+    },
+    StopSessionResponse: {
+      success: true,
+      message: 'Session stopped successfully'
     },
     StatusSessionResponse: {
       success: true,
@@ -68,11 +71,15 @@ const doc = {
     },
     NotFoundResponse: {
       success: false,
-      error: 'Some server error'
+      error: 'Not found error'
     },
     ForbiddenResponse: {
       success: false,
       error: 'Invalid API key'
+    },
+    GetSessionsResponse: {
+      success: true,
+      result: []
     }
   }
 }

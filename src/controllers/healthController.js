@@ -1,10 +1,11 @@
-const fs = require('fs')
+const fsp = require('fs').promises
 const qrcode = require('qrcode-terminal')
 const { sessionFolderPath } = require('../config')
 const { sendErrorResponse } = require('../utils')
+const { logger } = require('../logger')
 
 /**
- * Responds to ping request with 'pong'
+ * Responds to request with 'pong'
  *
  * @function ping
  * @async
@@ -16,16 +17,25 @@ const { sendErrorResponse } = require('../utils')
 const ping = async (req, res) => {
   /*
     #swagger.tags = ['Various']
+    #swagger.summary = 'Health check'
+    #swagger.description = 'Responds to request with "pong" message'
+    #swagger.responses[200] = {
+      description: "Response message",
+      content: {
+        "application/json": {
+          example: {
+            success: true,
+            message: "pong"
+          }
+        }
+      }
+    }
   */
-  try {
-    res.json({ success: true, message: 'pong' })
-  } catch (error) {
-    sendErrorResponse(res, 500, error.message)
-  }
+  res.json({ success: true, message: 'pong' })
 }
 
 /**
- * Example local callback function that generates a QR code and writes a log file
+ * Example local callback that generates a QR code and writes a log file
  *
  * @function localCallbackExample
  * @async
@@ -39,15 +49,36 @@ const ping = async (req, res) => {
 const localCallbackExample = async (req, res) => {
   /*
     #swagger.tags = ['Various']
+    #swagger.summary = 'Local callback'
+    #swagger.description = 'Used to generate a QR code and writes a log file. ONLY FOR DEVELOPMENT/TEST PURPOSES.'
+    #swagger.responses[200] = {
+      description: "Response message",
+      content: {
+        "application/json": {
+          example: {
+            success: true
+          }
+        }
+      }
+    }
   */
   try {
     const { dataType, data } = req.body
     if (dataType === 'qr') { qrcode.generate(data.qr, { small: true }) }
-    fs.writeFile(`${sessionFolderPath}/message_log.txt`, `${JSON.stringify(req.body)}\r\n`, { flag: 'a+' }, _ => _)
+    await fsp.mkdir(sessionFolderPath, { recursive: true })
+    await fsp.writeFile(`${sessionFolderPath}/message_log.txt`, `${JSON.stringify(req.body)}\r\n`, { flag: 'a+' })
     res.json({ success: true })
   } catch (error) {
-    console.log(error)
-    fs.writeFile(`${sessionFolderPath}/message_log.txt`, `(ERROR) ${JSON.stringify(error)}\r\n`, { flag: 'a+' }, _ => _)
+    /* #swagger.responses[500] = {
+      description: "Server Failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
+        }
+      }
+    }
+    */
+    logger.error(error, 'Failed to handle local callback')
     sendErrorResponse(res, 500, error.message)
   }
 }

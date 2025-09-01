@@ -1,6 +1,6 @@
 name: CI/CD Pipeline for Docker Tag Push
 
-'on':
+on:
   push:
     tags:
       - 'v*'
@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         node-version:
-          - 20.x
+          - 22.x
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
         run: npm ci
       - name: Run tests
         run: npm test
-        timeout-minutes: 1
+        timeout-minutes: 5
 
   docker:
     needs: test
@@ -43,8 +43,8 @@ jobs:
       - name: Build and push with dynamic tag
         uses: docker/build-push-action@v5
         with:
-          platforms: linux/amd64,linux/arm64 #,linux/arm/v7 # not supported by node20 yet https://github.com/nodejs/docker-node/issues/1946
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: |
-            chrishubert/whatsapp-web-api:${{ github.ref_name }}
-            chrishubert/whatsapp-web-api:latest
+            avoylenko/wwebjs-api:${{ github.ref_name }}
+            avoylenko/wwebjs-api:latest

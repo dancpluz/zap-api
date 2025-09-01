@@ -12,6 +12,7 @@ const chatController = require('./controllers/chatController')
 const groupChatController = require('./controllers/groupChatController')
 const messageController = require('./controllers/messageController')
 const contactController = require('./controllers/contactController')
+const channelController = require('./controllers/channelController')
 
 /**
  * ================
@@ -36,14 +37,18 @@ sessionRouter.use(middleware.apikey)
 sessionRouter.use(middleware.sessionSwagger)
 routes.use('/session', sessionRouter)
 
+sessionRouter.get('/getSessions', sessionController.getSessions)
 sessionRouter.get('/start/:sessionId', middleware.sessionNameValidation, sessionController.startSession)
+sessionRouter.get('/stop/:sessionId', middleware.sessionNameValidation, sessionController.stopSession)
 sessionRouter.get('/status/:sessionId', middleware.sessionNameValidation, sessionController.statusSession)
 sessionRouter.get('/qr/:sessionId', middleware.sessionNameValidation, sessionController.sessionQrCode)
 sessionRouter.get('/qr/:sessionId/image', middleware.sessionNameValidation, sessionController.sessionQrCodeImage)
+sessionRouter.post('/requestPairingCode/:sessionId', middleware.sessionNameValidation, sessionController.requestPairingCode)
 sessionRouter.get('/restart/:sessionId', middleware.sessionNameValidation, sessionController.restartSession)
 sessionRouter.get('/terminate/:sessionId', middleware.sessionNameValidation, sessionController.terminateSession)
 sessionRouter.get('/terminateInactive', sessionController.terminateInactiveSessions)
 sessionRouter.get('/terminateAll', sessionController.terminateAllSessions)
+sessionRouter.get('/getPageScreenshot/:sessionId', middleware.sessionNameValidation, sessionController.getPageScreenshot)
 
 /**
  * ================
@@ -91,6 +96,27 @@ clientRouter.post('/unarchiveChat/:sessionId', [middleware.sessionNameValidation
 clientRouter.post('/unmuteChat/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.unmuteChat)
 clientRouter.post('/unpinChat/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.unpinChat)
 clientRouter.get('/getWWebVersion/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getWWebVersion)
+clientRouter.delete('/deleteProfilePicture/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.deleteProfilePicture)
+clientRouter.post('/setAutoDownloadAudio/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.setAutoDownloadAudio)
+clientRouter.post('/setAutoDownloadDocuments/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.setAutoDownloadDocuments)
+clientRouter.post('/setAutoDownloadPhotos/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.setAutoDownloadPhotos)
+clientRouter.post('/setAutoDownloadVideos/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.setAutoDownloadVideos)
+clientRouter.post('/syncHistory/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.syncHistory)
+clientRouter.post('/getContactDeviceCount/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getContactDeviceCount)
+clientRouter.post('/getCountryCode/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getCountryCode)
+clientRouter.post('/getFormattedNumber/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getFormattedNumber)
+clientRouter.post('/openChatWindow/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.openChatWindow)
+clientRouter.post('/openChatWindowAt/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.openChatWindowAt)
+clientRouter.post('/resetState/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.resetState)
+clientRouter.post('/setBackgroundSync/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.setBackgroundSync)
+clientRouter.post('/getContactLidAndPhone/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getContactLidAndPhone)
+clientRouter.post('/getChannelByInviteCode/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getChannelByInviteCode)
+clientRouter.get('/getChannels/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.getChannels)
+clientRouter.post('/createChannel/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.createChannel)
+clientRouter.post('/subscribeToChannel/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.subscribeToChannel)
+clientRouter.post('/unsubscribeFromChannel/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.unsubscribeFromChannel)
+clientRouter.post('/searchChannels/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.searchChannels)
+clientRouter.post('/runMethod/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], clientController.runMethod)
 
 /**
  * ================
@@ -110,6 +136,12 @@ chatRouter.post('/fetchMessages/:sessionId', [middleware.sessionNameValidation, 
 chatRouter.post('/getContact/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.getContact)
 chatRouter.post('/sendStateRecording/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.sendStateRecording)
 chatRouter.post('/sendStateTyping/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.sendStateTyping)
+chatRouter.post('/sendSeen/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.sendSeen)
+chatRouter.post('/markUnread/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.markUnread)
+chatRouter.post('/syncHistory/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.syncHistory)
+chatRouter.post('/getLabels/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.getLabels)
+chatRouter.post('/changeLabels/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.changeLabels)
+chatRouter.post('/runMethod/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], chatController.runMethod)
 
 /**
  * ================
@@ -135,6 +167,10 @@ groupChatRouter.post('/setMessagesAdminsOnly/:sessionId', [middleware.sessionNam
 groupChatRouter.post('/setSubject/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.setSubject)
 groupChatRouter.post('/setPicture/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.setPicture)
 groupChatRouter.post('/deletePicture/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.deletePicture)
+groupChatRouter.post('/getGroupMembershipRequests/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.getGroupMembershipRequests)
+groupChatRouter.post('/approveGroupMembershipRequests/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.approveGroupMembershipRequests)
+groupChatRouter.post('/rejectGroupMembershipRequests/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.rejectGroupMembershipRequests)
+groupChatRouter.post('/runMethod/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], groupChatController.runMethod)
 
 /**
  * ================
@@ -149,6 +185,7 @@ routes.use('/message', messageRouter)
 messageRouter.post('/getClassInfo/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getClassInfo)
 messageRouter.post('/delete/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.deleteMessage)
 messageRouter.post('/downloadMedia/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.downloadMedia)
+messageRouter.post('/downloadMediaAsData/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.downloadMediaAsData)
 messageRouter.post('/forward/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.forward)
 messageRouter.post('/getInfo/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getInfo)
 messageRouter.post('/getMentions/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getMentions)
@@ -159,6 +196,11 @@ messageRouter.post('/react/:sessionId', [middleware.sessionNameValidation, middl
 messageRouter.post('/reply/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.reply)
 messageRouter.post('/star/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.star)
 messageRouter.post('/unstar/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.unstar)
+messageRouter.post('/getReactions/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getReactions)
+messageRouter.post('/getGroupMentions/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getGroupMentions)
+messageRouter.post('/edit/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.edit)
+messageRouter.post('/getContact/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.getContact)
+messageRouter.post('/runMethod/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], messageController.runMethod)
 
 /**
  * ================
@@ -178,6 +220,36 @@ contactRouter.post('/unblock/:sessionId', [middleware.sessionNameValidation, mid
 contactRouter.post('/getFormattedNumber/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], contactController.getFormattedNumber)
 contactRouter.post('/getCountryCode/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], contactController.getCountryCode)
 contactRouter.post('/getProfilePicUrl/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], contactController.getProfilePicUrl)
+contactRouter.post('/getCommonGroups/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], contactController.getCommonGroups)
+
+/**
+ * ================
+ * CHANNEL ENDPOINTS
+ * ================
+ */
+const channelRouter = express.Router()
+channelRouter.use(middleware.apikey)
+sessionRouter.use(middleware.channelSwagger)
+routes.use('/channel', channelRouter)
+
+channelRouter.post('/getClassInfo/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.getClassInfo)
+channelRouter.post('/sendMessage/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.sendMessage)
+channelRouter.post('/fetchMessages/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.fetchMessages)
+channelRouter.post('/sendSeen/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.sendSeen)
+channelRouter.post('/mute/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.mute)
+channelRouter.post('/unmute/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.unmute)
+channelRouter.post('/acceptChannelAdminInvite/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.acceptChannelAdminInvite)
+channelRouter.post('/sendChannelAdminInvite/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.sendChannelAdminInvite)
+channelRouter.post('/revokeChannelAdminInvite/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.revokeChannelAdminInvite)
+channelRouter.post('/transferChannelOwnership/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.transferChannelOwnership)
+channelRouter.post('/demoteChannelAdmin/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.demoteChannelAdmin)
+channelRouter.post('/getSubscribers/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.getSubscribers)
+channelRouter.post('/setProfilePicture/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.setProfilePicture)
+channelRouter.post('/setDescription/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.setDescription)
+channelRouter.post('/setSubject/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.setSubject)
+channelRouter.post('/setReactionSetting/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.setReactionSetting)
+channelRouter.post('/deleteChannel/:sessionId', [middleware.sessionNameValidation, middleware.sessionValidation], channelController.deleteChannel)
+
 /**
  * ================
  * SWAGGER ENDPOINTS

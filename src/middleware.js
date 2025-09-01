@@ -70,14 +70,22 @@ const sessionValidation = async (req, res, next) => {
 }
 
 const rateLimiter = rateLimiting({
-  max: rateLimitMax,
-  windowMS: rateLimitWindowMs,
+  limit: rateLimitMax,
+  windowMs: rateLimitWindowMs,
   message: "You can't make any more requests at the moment. Try again later"
 })
 
 const sessionSwagger = async (req, res, next) => {
   /*
     #swagger.tags = ['Session']
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
+        }
+      }
+    }
   */
   next()
 }
@@ -85,6 +93,14 @@ const sessionSwagger = async (req, res, next) => {
 const clientSwagger = async (req, res, next) => {
   /*
     #swagger.tags = ['Client']
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
+        }
+      }
+    }
   */
   next()
 }
@@ -99,9 +115,17 @@ const contactSwagger = async (req, res, next) => {
         properties: {
           contactId: {
             type: 'string',
-            description: 'Unique whatsApp identifier for the contact',
+            description: 'Unique WhatsApp ID for the contact',
             example: '6281288888888@c.us'
           }
+        }
+      }
+    }
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
         }
       }
     }
@@ -119,12 +143,12 @@ const messageSwagger = async (req, res, next) => {
         properties: {
           chatId: {
             type: 'string',
-            description: 'The Chat id which contains the message',
+            description: 'The chat id which contains the message',
             example: '6281288888888@c.us'
           },
           messageId: {
             type: 'string',
-            description: 'Unique whatsApp identifier for the message',
+            description: 'Unique WhatsApp ID for the message',
             example: 'ABCDEF999999999'
           }
         }
@@ -144,9 +168,17 @@ const chatSwagger = async (req, res, next) => {
         properties: {
           chatId: {
             type: 'string',
-            description: 'Unique whatsApp identifier for the given Chat (either group or personnal)',
+            description: 'Unique WhatsApp ID for the given chat (either group or personal)',
             example: '6281288888888@c.us'
           }
+        }
+      }
+    }
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
         }
       }
     }
@@ -164,9 +196,32 @@ const groupChatSwagger = async (req, res, next) => {
         properties: {
           chatId: {
             type: 'string',
-            description: 'Unique whatsApp identifier for the given Chat (either group or personnal)',
-            example: '6281288888888@c.us'
+            description: 'Unique WhatsApp id for the given chat group',
+            example: 'XXXXXXXXXX@g.us'
           }
+        }
+      }
+    }
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
+        }
+      }
+    }
+  */
+  next()
+}
+
+const channelSwagger = async (req, res, next) => {
+  /*
+    #swagger.tags = ['Channel Chat']
+    #swagger.responses[500] = {
+      description: "Server failure.",
+      content: {
+        "application/json": {
+          schema: { "$ref": "#/definitions/ErrorResponse" }
         }
       }
     }
@@ -184,5 +239,6 @@ module.exports = {
   messageSwagger,
   chatSwagger,
   groupChatSwagger,
+  channelSwagger,
   rateLimiter
 }

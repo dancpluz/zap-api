@@ -1,10 +1,14 @@
 const axios = require('axios')
-const { globalApiKey, disabledCallbacks } = require('./config')
+const { globalApiKey, disabledCallbacks, enableWebHook } = require('./config')
+const { logger } = require('./logger')
 
 // Trigger webhook endpoint
 const triggerWebhook = (webhookURL, sessionId, dataType, data) => {
-  axios.post(webhookURL, { dataType, data, sessionId }, { headers: { 'x-api-key': globalApiKey } })
-    .catch(error => console.error('Failed to send new message webhook:', sessionId, dataType, error.message, data || ''))
+  if (enableWebHook) {
+    axios.post(webhookURL, { dataType, data, sessionId }, { headers: { 'x-api-key': globalApiKey } })
+      .then(() => logger.debug({ sessionId, dataType, data: data || '' }, `Webhook message sent to ${webhookURL}`))
+      .catch(error => logger.error({ sessionId, dataType, err: error, data: data || '' }, `Failed to send webhook message to ${webhookURL}`))
+  }
 }
 
 // Function to send a response with error status and message
@@ -23,7 +27,7 @@ const waitForNestedObject = (rootObj, nestedPath, maxWaitTime = 10000, interval 
         resolve()
       } else if (Date.now() - start > maxWaitTime) {
         // Maximum wait time exceeded, reject the promise
-        console.log('Timed out waiting for nested object')
+        logger.error('Timed out waiting for nested object')
         reject(new Error('Timeout waiting for nested object'))
       } else {
         // Nested object not yet created, continue waiting
@@ -34,13 +38,48 @@ const waitForNestedObject = (rootObj, nestedPath, maxWaitTime = 10000, interval 
   })
 }
 
-const checkIfEventisEnabled = (event) => {
-  return new Promise((resolve, reject) => { if (!disabledCallbacks.includes(event)) { resolve() } })
+const isEventEnabled = (event) => {
+  return !disabledCallbacks.includes(event)
+}
+
+const sendMessageSeenStatus = async (message) => {
+  try {
+    const chat = await message.getChat()
+    await chat.sendSeen()
+  } catch (error) {
+    logger.error(error, 'Failed to send seen status')
+  }
+}
+
+const decodeBase64 = function * (base64String) {
+  const chunkSize = 1024
+  for (let i = 0; i < base64String.length; i += chunkSize) {
+    const chunk = base64String.slice(i, i + chunkSize)
+    yield Buffer.from(chunk, 'base64')
+  }
+}
+
+const sleep = function (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+const exposeFunctionIfAbsent = async (page, name, fn) => {
+  const exist = await page.evaluate((name) => {
+    return !!window[name]
+  }, name)
+  if (exist) {
+    return
+  }
+  await page.exposeFunction(name, fn)
 }
 
 module.exports = {
   triggerWebhook,
   sendErrorResponse,
   waitForNestedObject,
-  checkIfEventisEnabled
+  isEventEnabled,
+  sendMessageSeenStatus,
+  decodeBase64,
+  sleep,
+  exposeFunctionIfAbsent
 }

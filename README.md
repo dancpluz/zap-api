@@ -1,9 +1,11 @@
-# WhatsApp REST API
+# WWebJS REST API
 
 REST API wrapper for the [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) library, providing an easy-to-use interface to interact with the WhatsApp Web platform. 
-It is designed to be used as a docker container, scalable, secure, and easy to integrate with other non-NodeJs projects.
+It is designed to be used as a docker container, scalable, secure, and easy to integrate with other non-NodeJS projects.
 
-This project is a work in progress: star it, create issues, features or pull requests ❣️
+This project is a fork of [whatsapp-api](https://github.com/chrishubert/whatsapp-api). As the project was abandoned by the original author, all future improvements will be in this repo.
+
+The project is a work in progress: star it, create issues, features or pull requests ❣️
 
 **NOTE**: I can't guarantee you will not be blocked by using this method, although it has worked for me. WhatsApp does not allow bots or unofficial clients on their platform, so this shouldn't be considered totally safe.
 
@@ -29,13 +31,13 @@ This project is a work in progress: star it, create issues, features or pull req
 
 ## Quick Start with Docker
 
-[![dockeri.co](https://dockerico.blankenship.io/image/chrishubert/whatsapp-web-api)](https://hub.docker.com/r/chrishubert/whatsapp-web-api)
+[![dockeri.co](https://dockerico.blankenship.io/image/avoylenko/wwebjs-api)](https://hub.docker.com/r/avoylenko/wwebjs-api)
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/chrishubert/whatsapp-api.git
-cd whatsapp-api
+git clone https://github.com/avoylenko/wwebjs-api.git
+cd wwebjs-api
 ```
 
 3. Run the Docker Compose:
@@ -60,17 +62,16 @@ docker-compose pull && docker-compose up
 | Actions                      | Status | Sessions                                | Status | Callbacks                                      | Status |
 | ----------------------------| ------| ----------------------------------------| ------| ----------------------------------------------| ------|
 | Send Image Message           | ✅     | Initiate session                       | ✅    | Callback QR code                               | ✅     |
-| Send Video Message           | ✅     | Terminate session                      | ✅    | Callback new message                           | ✅     |
+| Send Video Message(requires Google Chrome)           | ✅     | Terminate session                      | ✅    | Callback new message                           | ✅     |
 | Send Audio Message           | ✅     | Terminate inactive sessions            | ✅    | Callback status change                         | ✅     |
 | Send Document Message        | ✅     | Terminate all sessions                 | ✅    | Callback message media attachment              | ✅     |
-| Send File URL                | ✅     | Healthcheck                            | ✅    |                                                |        |
-| Send Button Message          | ✅     | Local test callback                    |        |                                                |        |
-| Send Contact Message         | ✅     |                                        |        |                                                |        |
-| Send List Message            | ✅     |                                        |        |                                                |        |
+| Send File URL                | ✅     | Restart session                            | ✅    |                                                |        |
+| Send Contact Message         | ✅     | Get session status                                      |  ✅      |                                                |        |
+| Send Poll Message         | ✅     | Health Check                                       |   ✅     |                                                |        |
+| Edit Message         | ✅     |                                        |        |                                                |        |
 | Set Status                   | ✅     |                                        |        |                                                |        |
-| Send Button With Media       | ✅     |                                        |        |                                                |        |
 | Is On Whatsapp?              | ✅     |                                        |        |                                                |        |
-| Download Profile Pic         | ✅     |                                        |        |                                                |        |
+| Download Profile Picture         | ✅     |                                        |        |                                                |        |
 | User Status                  | ✅     |                                        |        |                                                |        |
 | Block/Unblock User           | ✅     |                                        |        |                                                |        |
 | Update Profile Picture       | ✅     |                                        |        |                                                |        |
@@ -86,23 +87,23 @@ docker-compose pull && docker-compose up
 | Update Group Subject         | ✅     |                                        |        |                                                |        |
 | Update Group Description     | ✅     |                                        |        |                                                |        |
 
-3. Handle multiple client sessions (session data saved locally), identified by unique id
+1. Handle multiple client sessions (session data saved locally), identified by unique id
 
-4. All endpoints may be secured by a global API key
+2. All endpoints may be secured by a global API key
 
-5. On server start, all existing sessions are restored
+3. On server start, all existing sessions are restored
 
-6. Set messages automatically as read
+4. Set messages automatically as read
 
-7. Disable any of the callbacks
+5. Disable any of the callbacks
 
 ## Run Locally
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/chrishubert/whatsapp-api.git
-cd whatsapp-api
+git clone https://github.com/avoylenko/wwebjs-api.git
+cd wwebjs-api
 ```
 
 2. Install the dependencies:
@@ -135,7 +136,7 @@ npm run test
 
 ## Documentation
 
-API documentation can be found in the [`swagger.json`](https://raw.githubusercontent.com/chrishubert/whatsapp-api/master/swagger.json) file. See this file directly into [Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/chrishubert/whatsapp-api/master/swagger.json) or any other OpenAPI-compatible tool to view and interact with the API documentation.
+API documentation can be found in the [`swagger.json`](https://raw.githubusercontent.com/avoylenko/wwebjs-api/main/swagger.json) file. See this file directly into [Swagger Editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/avoylenko/wwebjs-api/main/swagger.json) or any other OpenAPI-compatible tool to view and interact with the API documentation.
 
 This documentation is straightforward if you are familiar with whatsapp-web.js library (https://docs.wwebjs.dev/)
 If you are still confused - open an issue and I'll improve it.
@@ -148,9 +149,22 @@ For example, if you have the sessionId defined as `DEMO`, the environment variab
 
 By setting the `DISABLED_CALLBACKS` environment variable you can specify what events you are **not** willing to receive on your webhook.
 
+By setting the `ENABLE_WEBHOOK` environment to `FALSE` you can disable webhook dispatching. This will help you if you want to switch to websocket method(see below).
+
 ### Scanning QR code
 
 In order to validate a new WhatsApp Web instance you need to scan the QR code using your mobile phone. Official documentation can be found at (https://faq.whatsapp.com/1079327266110265/?cms_platform=android) page. The service itself delivers the QR code content as a webhook event or you can use the REST endpoints (`/session/qr/:sessionId` or `/session/qr/:sessionId/image` to get the QR code as a png image). 
+
+### WebSocket mode
+The service can dispatch realtime events through websocket connection. By default, the websocket is not activated, so you need manually set the `ENABLE_WEBSOCKET` environment variable to activate it. The server activates a new websocket instance per each active session. The websocket path is `/ws/:sessionId`, where sessionId is your configured session name. The websocket supports ping/pong scheme to keep the socket running.
+The below example shows how to receive the events for **test** session.
+```
+const ws = new WebSocket('ws://127.0.0.1:3000/ws/test');
+
+ws.on('message', (data) => {
+    // consume the events
+});
+```
 
 ## Deploy to Production
 
@@ -173,4 +187,4 @@ This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=chrishubert/whatsapp-api&type=Date)](https://star-history.com/#chrishubert/whatsapp-api&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=avoylenko/wwebjs-api&type=Date)](https://star-history.com/#avoylenko/wwebjs-api&Date)
