@@ -128,15 +128,19 @@ const setupSession = (sessionId) => {
 
     const client = new Client(clientOptions)
 
-    const lockFiles = ['SingletonLock','SingletonCookie','SingletonLock.log'];
-    const sessionDir = path.join(sessionFolderPath,`session-${sessionId}`);
-    lockFiles.forEach(file => {
-      const lockPath = path.join(sessionDir,file);
-      if (fs.existsSync(lockPath)) {
-        fs.unlinkSync(lockPath);
-        console.log(`Removed stale lock file: ${lockPath}`);
-      }
-    });
+    const cleanLockFiles = (sessionId) => {
+      const dir = path.join(sessionFolderPath,`session-${sessionId}`);
+      ['SingletonLock','SingletonCookie'].forEach(file => {
+        const p = path.join(dir,file);
+        if (fs.existsSync(p)) {
+          fs.unlinkSync(p);
+          console.log(`Auto-removed lock file: ${p}`);
+        }
+      });
+    };
+
+    // Inside setupSession:
+    cleanLockFiles(sessionId);
 
     client.initialize().catch(err => console.log('Initialize error:', err.message))
 
