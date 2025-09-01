@@ -9,6 +9,7 @@ services:
     ports:
       - "${PORT}:${PORT}"
     environment:
+      - PORT=${PORT}
       - API_KEY=${API_KEY}
       - BASE_WEBHOOK_URL=${BASE_WEBHOOK_URL}
       - ENABLE_LOCAL_CALLBACK_EXAMPLE=${ENABLE_LOCAL_CALLBACK_EXAMPLE}

@@ -2,6 +2,7 @@
 require('dotenv').config()
 
 // setup global const
+const port = parseInt(process.env.PORT) || 3000
 const sessionFolderPath = process.env.SESSIONS_PATH || './sessions'
 const enableLocalCallbackExample = (process.env.ENABLE_LOCAL_CALLBACK_EXAMPLE || '').toLowerCase() === 'true'
 const globalApiKey = process.env.API_KEY
@@ -29,5 +30,6 @@ module.exports = {
   webVersionCacheType,
   rateLimitMax,
   rateLimitWindowMs,
-  recoverSessions
+  recoverSessions,
+  port
 }
